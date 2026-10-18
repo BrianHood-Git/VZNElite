@@ -1,0 +1,18 @@
+create index if not exists team_availability_updated_by_idx on public.team_availability(updated_by);
+drop policy link_admin on public.family_links;
+create policy link_admin_insert on public.family_links for insert to authenticated with check (((select team_private.has_role('administrator'))));
+create policy link_admin_update on public.family_links for update to authenticated using ((select team_private.has_role('administrator'))) with check (((select team_private.has_role('administrator'))));
+create policy link_admin_delete on public.family_links for delete to authenticated using ((select team_private.has_role('administrator')));
+drop policy events_staff on public.team_events;
+create policy events_staff_insert on public.team_events for insert to authenticated with check (((select team_private.has_role('administrator')) or (select team_private.has_role('coach'))));
+create policy events_staff_update on public.team_events for update to authenticated using ((select team_private.has_role('administrator')) or (select team_private.has_role('coach'))) with check (((select team_private.has_role('administrator')) or (select team_private.has_role('coach'))));
+create policy events_staff_delete on public.team_events for delete to authenticated using ((select team_private.has_role('administrator')) or (select team_private.has_role('coach')));
+drop policy availability_write on public.team_availability;
+create policy availability_write_insert on public.team_availability for insert to authenticated with check ((team_private.linked(player_id) or (select team_private.has_role('administrator'))) and updated_by=(select auth.uid()));
+create policy availability_write_update on public.team_availability for update to authenticated using (team_private.linked(player_id) or (select team_private.has_role('administrator'))) with check ((team_private.linked(player_id) or (select team_private.has_role('administrator'))) and updated_by=(select auth.uid()));
+create policy availability_write_delete on public.team_availability for delete to authenticated using (team_private.linked(player_id) or (select team_private.has_role('administrator')));
+drop policy roster_write on public.team_players;
+drop policy family_roster_update on public.team_players;
+create policy roster_insert on public.team_players for insert to authenticated with check((select team_private.has_role('administrator')) or (select team_private.has_role('coach')));
+create policy roster_update on public.team_players for update to authenticated using((select team_private.has_role('administrator')) or (select team_private.has_role('coach')) or team_private.linked(id)) with check((select team_private.has_role('administrator')) or (select team_private.has_role('coach')) or team_private.linked(id));
+create policy roster_delete on public.team_players for delete to authenticated using((select team_private.has_role('administrator')) or (select team_private.has_role('coach')));

@@ -1,0 +1,22 @@
+{
+  "name": "vzn-elite",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "check": "node --check public/app.js && node --check public/account.js && node --check public/workspace-tabs.js && node --check public/family-directory.js && node --check public/family-onboarding.js && node --check public/cloud-team.js && node --check public/team-calendar.js && node --check public/calendar-model.js && node --check public/cloud-data.js && node --check public/shared-calendar.js && node --check public/announcements.js && node --check public/finances.js && node --check public/dues.js && node --check public/policies.js && node --check public/payments.js && node --check server.mjs && node --check public/notifications.js && node --check worker/index.js && node --check worker/security.js",
+    "build:auth": "esbuild auth-entry.js --bundle --format=esm --platform=browser --outfile=public/vendor/supabase.js --minify",
+    "test": "node --test *.test.mjs",
+    "dev:worker": "wrangler dev --local",
+    "build": "npm run check && wrangler deploy --dry-run",
+    "deploy": "node deploy.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "wrangler": "4.151.1"
+  }
+}

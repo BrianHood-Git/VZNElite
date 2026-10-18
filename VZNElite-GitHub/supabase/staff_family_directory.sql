@@ -1,0 +1,2 @@
+alter policy link_read on public.family_links using(user_id=(select auth.uid()) or (select team_private.has_role('administrator')) or (select team_private.has_role('coach')));
+alter policy profile_read on public.account_profiles using(id=(select auth.uid()) or (select team_private.has_role('administrator')) or ((select team_private.has_role('coach')) and (exists(select 1 from public.family_links l where l.user_id=id) or exists(select 1 from public.player_requests r where r.requested_by=id))));

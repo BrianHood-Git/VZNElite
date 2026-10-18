@@ -1,0 +1,5 @@
+export function calendarDownload(event){
+ const escape=x=>String(x).replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');
+ const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Team Portal//Calendar//EN','BEGIN:VTIMEZONE','TZID:America/Chicago','BEGIN:DAYLIGHT','DTSTART:20070311T020000','RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU','TZOFFSETFROM:-0600','TZOFFSETTO:-0500','END:DAYLIGHT','BEGIN:STANDARD','DTSTART:20071104T020000','RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU','TZOFFSETFROM:-0500','TZOFFSETTO:-0600','END:STANDARD','END:VTIMEZONE','BEGIN:VEVENT',`UID:${event.id}@team-portal`,`DTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'')}`,`DTSTART;TZID=America/Chicago:${event.date.replaceAll('-','')}T${event.time.slice(0,5).replace(':','')}00`,`SUMMARY:${escape(event.title)}`,`LOCATION:${escape(event.location)}`,'END:VEVENT','END:VCALENDAR'];
+ const url=URL.createObjectURL(new Blob([lines.join('\r\n')],{type:'text/calendar'}));const a=document.createElement('a');a.href=url;a.download='team-event.ics';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}

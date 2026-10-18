@@ -1,0 +1,42 @@
+{
+  "name": "vzn-elite",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-10-17",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true
+    }
+  },
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  },
+  "vars": {
+    "SITE_ORIGIN": "https://vznelite.org",
+    "SUPABASE_URL": "https://cfxieoqafldmbrcibqwq.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_YZedYdjtkYjh6K-RcEkCnA_CkyQXb1n",
+    "PAYMENTS_ENABLED": "false",
+    "NOTIFICATIONS_ENABLED": "true",
+    "MAIL_FROM": "VZN Elite <notifications@vznelite.org>",
+    "NOTIFICATION_SITE_ORIGIN": "https://vznelite.org"
+  },
+  "account_id": "5c052106020fdea2cdd13759f2b95ad3",
+  "routes": [
+    {
+      "pattern": "vznelite.org",
+      "custom_domain": true,
+      "zone_name": "vznelite.org"
+    }
+  ],
+  "workers_dev": false,
+  "preview_urls": false
+}
