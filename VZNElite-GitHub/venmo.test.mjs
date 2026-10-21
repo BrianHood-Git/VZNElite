@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {parseVenmoCSV} from './public/venmo-csv.js';
+import {receiptEntries,VENMO_URL} from './public/venmo.js';
+import {defaults} from './public/dues.js';
+const header='ID,Datetime,Type,Status,Note,From,To,Amount (total),Amount (fee)\n';
+const row=(id='9999999999999999999',type='Payment',status='Complete',gross='+ $50.00',fee='- $1.05',to='@VZNElite2030')=>`${id},2026-10-20T10:00:00,${type},${status},"Player, October",Parent,${to},${gross},${fee}\n`;
+test('Venmo defaults to $50 and profile link is external HTTPS',()=>{assert.equal(defaults().monthly,5000);assert.equal(VENMO_URL,'https://venmo.com/VZNElite2030');});
+test('statement preamble, quoted fields, and large IDs survive import',()=>{const {entries}=parseVenmoCSV('Venmo statement\n\n'+header+row());assert.equal(entries[0].transaction_id,'9999999999999999999');assert.equal(entries[0].note,'Player, October');assert.equal(entries[0].gross_cents,5000);assert.equal(entries[0].fee_cents,105);assert.equal(receiptEntries(entries).reduce((s,x)=>s+x.amount,0),4895);});
+test('duplicate IDs within a file and across imports do not add income',()=>{const text=header+row()+row();const first=parseVenmoCSV(text);assert.equal(first.entries.length,1);assert.equal(first.skipped.length,1);assert.equal(parseVenmoCSV(text,first.entries).entries.length,0);});
+test('conflicting duplicate IDs stop import',()=>assert.throws(()=>parseVenmoCSV(header+row()+row(undefined,undefined,undefined,'51.00')),/Conflicting/));
+test('transfers, refunds, incomplete and outgoing payments are excluded',()=>{const r=parseVenmoCSV(header+row('a','Standard Transfer')+row('b','Refund')+row('c','Payment','Pending')+row('d','Payment','Complete','-50.00'));assert.equal(r.entries.length,0);assert.equal(r.skipped.length,4);});
+test('unknown layout, wrong recipient, bad dates, malformed currency and excessive fees fail closed',()=>{for(const text of ['ID,amount\nx,50',header+row('a',undefined,undefined,undefined,undefined,'SomeoneElse'),header+row().replace('2026-10-20','2026-02-30'),header+row(undefined,undefined,undefined,'5oops'),header+row(undefined,undefined,undefined,'50','51')])assert.throws(()=>parseVenmoCSV(text));});

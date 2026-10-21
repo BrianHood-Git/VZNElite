@@ -1,0 +1,6 @@
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export async function mountCoachContacts(container,{client}){
+ const root=document.createElement('section');root.className='card finance-heading';root.dataset.workspace='tournaments';container.append(root);
+ async function draw(){root.innerHTML='<h2>Tournament contacts</h2><p>Read-only organizer contacts for coaches.</p><button class="quiet" type="button">Refresh contacts</button><p role="status">Loading...</p><div data-contacts></div>';try{const {data,error}=await client.rpc('coach_tournament_contacts');if(error)throw error;if(!root.isConnected)return;root.querySelector('[role=status]').textContent='';root.querySelector('[data-contacts]').innerHTML=data.map(t=>`<article class="announcement"><h3>${esc(t.name)}</h3><p>${esc(t.event_date||'Date pending')}${t.location?' / '+esc(t.location):''}</p><p>${esc(t.contact_name||'Contact not entered')}${t.contact_phone?`<br><a href="tel:${esc(t.contact_phone.replace(/[^+\d]/g,''))}">${esc(t.contact_phone)}</a>`:''}</p></article>`).join('')||'<p>No tournament contacts recorded.</p>';}catch(err){root.querySelector('[role=status]').textContent=err.message;}}
+ root.addEventListener('click',async e=>{e.stopPropagation();if(e.target.closest('button'))await draw();});await draw();
+}

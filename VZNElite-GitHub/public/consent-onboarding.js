@@ -1,0 +1,22 @@
+import {policies,policyVersion} from './policies.js?v=20261021-venmo';
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const documents=()=>policies.map(([title,body])=>`<details><summary>${esc(title)}</summary><p style="white-space:pre-line">${esc(body)}</p></details>`).join('');
+export function showRegistrationPolicies(container){
+ const dialog=document.createElement('dialog');dialog.setAttribute('aria-label','Parent consent and team policies');
+ dialog.innerHTML=`<h2>Parent consent & team policies</h2><p>Please review these draft forms as part of registration. After your account is confirmed and your child is linked, you will be prompted to record permission for each child. Reviewing this page does not submit consent.</p>${documents()}<p>Public profile and photo/video permission are optional.</p><button type="button" class="button">Continue registration</button>`;
+ container.append(dialog);dialog.querySelector('button').onclick=()=>dialog.close();dialog.showModal();
+}
+export function needsConsent(records,playerId,parentId){const latest=records.filter(r=>r.player_id===playerId&&r.parent_id===parentId).sort((a,b)=>b.recorded_at.localeCompare(a.recorded_at))[0];return !latest||latest.version!==policyVersion||latest.payload.withdrawn||!['guardian','participation','conduct','electronic'].every(k=>latest.payload[k]);}
+export async function promptParentConsent(container,{client,user,roles,roster}){
+ if(!roles.includes('parent'))return;
+ const check=r=>{if(r.error)throw r.error;return r.data;};
+ const links=check(await client.from('family_links').select('*').eq('user_id',user.id).eq('relationship','parent'));
+ const records=check(await client.from('parent_consents').select('*').eq('parent_id',user.id));
+ const pending=roster.filter(p=>p.roster_status!=='former'&&links.some(l=>l.player_id===p.id)&&needsConsent(records,p.id,user.id));
+ if(!pending.length||!container.isConnected)return;
+ const reminder=document.createElement('section');reminder.className='card finance-heading';reminder.innerHTML='<h3>Parent consent needed</h3><p>Review and record permission for each linked child. Photo and public profile permission are optional.</p><button type="button" class="button">Review consent forms</button>';container.prepend(reminder);
+ const dialog=document.createElement('dialog');dialog.setAttribute('aria-label','Parent consent forms');container.append(dialog);let busy=false;
+ function draw(){const p=pending[0];if(!p){dialog.close();dialog.remove();reminder.remove();return;}dialog.innerHTML=`<h2>Consent for ${esc(p.display_name)}</h2><p>${pending.length} child consent form(s) remaining. These policies remain unreviewed drafts.</p>${documents()}<form><label>Participation starts<input name="start" type="date" required></label>${[['guardian',"I am this child's authorized parent or legal guardian."],['participation','I agree to the participation permission and risk acknowledgment from the start date until withdrawal.'],['conduct','I have read the privacy notice, terms, and code of conduct.'],['electronic','Record these choices electronically in my account.']].map(([k,t])=>`<label><input type="checkbox" name="${k}" required> ${t}</label>`).join('')}<label><input type="checkbox" name="profile"> Optional: allow a public player profile</label><label><input type="checkbox" name="media"> Optional: allow team website photos/videos</label><p role="status"></p><button class="button" type="submit">Save consent for ${esc(p.display_name)}</button><button type="button" class="quiet" data-later>Review later</button></form>`;dialog.querySelector('[data-later]').onclick=()=>dialog.close();}
+ dialog.addEventListener('submit',async e=>{e.preventDefault();e.stopPropagation();if(busy)return;busy=true;const b=e.target.querySelector('[type=submit]');b.disabled=true;try{const d=new FormData(e.target),payload=Object.fromEntries(['guardian','participation','conduct','electronic','profile','media'].map(k=>[k,d.has(k)]));Object.assign(payload,{start:d.get('start'),end:null,documents:policies});check(await client.from('parent_consents').insert({player_id:pending[0].id,parent_id:user.id,version:policyVersion,payload}));pending.shift();draw();}catch(err){dialog.querySelector('[role=status]').textContent=err.message;}finally{busy=false;if(b.isConnected)b.disabled=false;}});
+ reminder.querySelector('button').onclick=()=>{draw();dialog.showModal();};draw();dialog.showModal();
+}
