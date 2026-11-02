@@ -1,0 +1,23 @@
+begin;
+do $test$ declare a uuid:=gen_random_uuid();c uuid:=gen_random_uuid();p uuid:=gen_random_uuid();child uuid:=gen_random_uuid();dues uuid;begin
+insert into auth.users(id,email,email_confirmed_at) values(a,a||'@example.invalid',now()),(c,c||'@example.invalid',now()),(p,p||'@example.invalid',now());
+insert into public.team_memberships values(a,'administrator'),(c,'coach'),(p,'parent');
+insert into public.team_players(id,display_name,billing_parent_id) values(child,'Coach read QA',p);
+insert into public.manual_dues(player_id,payer_id,period,amount_cents,created_by,updated_by) values(child,p,'2026-10-01',12500,a,a) returning id into dues;
+insert into public.team_tournaments(name,contact_name,contact_phone,cost_cents,notes) values('Coach contact QA','Example','555-0100',35000,'PRIVATE');
+perform set_config('request.jwt.claim.sub',c::text,true);set local role authenticated;
+if not exists(select 1 from public.coach_player_dues() d where d.id=dues and d.amount_cents=12500 and not d.paid) then raise exception 'Coach dues missing';end if;
+if not exists(select 1 from public.coach_tournament_contacts() where name='Coach contact QA' and contact_name='Example') then raise exception 'Coach contact missing';end if;
+if exists(select 1 from public.team_tournaments) then raise exception 'Coach can read private tournament financials';end if;
+if exists(select 1 from public.manual_dues where id=dues) then raise exception 'Coach can read private payment record';end if;
+begin perform public.set_manual_dues_payment(dues,1,true,current_date,'cash','');raise exception 'Coach changed payment';exception when insufficient_privilege then null;end;
+begin insert into public.team_tournaments(name) values('Forbidden QA');raise exception 'Coach can edit tournaments';exception when insufficient_privilege then null;end;
+perform set_config('request.jwt.claim.sub',p::text,true);
+begin perform public.coach_player_dues();raise exception 'Parent can read team dues';exception when insufficient_privilege then null;end;
+begin perform public.coach_tournament_contacts();raise exception 'Parent can read organizer contacts';exception when insufficient_privilege then null;end;
+if not exists(select 1 from public.manual_dues where id=dues) then raise exception 'Parent lost own dues access';end if;
+perform set_config('request.jwt.claim.sub',a::text,true);
+if not exists(select 1 from public.team_tournaments where notes='PRIVATE') then raise exception 'Admin lost financial access';end if;
+reset role;
+end $test$;
+rollback;

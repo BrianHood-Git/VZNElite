@@ -1,2 +1,0 @@
-import {playerPlan,dollars} from './dues.js?v=20261021-venmo';
-export function paymentPreview(settings,playerId){const p=playerPlan(settings,playerId);return `<section class="card"><h2>Monthly Player Contribution</h2><p>${dollars(p.monthly)} per month after ${dollars(p.covered)} in monthly support. ${p.months} planned installments.</p><p>This is a contribution plan, not a receipt. Contributions are arranged outside this website. An administrator records each contribution after verifying receipt.</p></section>`;}

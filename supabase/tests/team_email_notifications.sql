@@ -1,0 +1,44 @@
+begin;
+do $test$ declare a uuid:=gen_random_uuid();c uuid:=gen_random_uuid();p uuid:=gen_random_uuid();f uuid:=gen_random_uuid();u uuid:=gen_random_uuid();
+ child uuid:=gen_random_uuid();former uuid:=gen_random_uuid();ev uuid:=gen_random_uuid();winter uuid:=gen_random_uuid();ann text:=gen_random_uuid()::text;begin
+ insert into auth.users(id,email,email_confirmed_at) values(a,a||'@example.invalid',now()),(c,c||'@example.invalid',now()),(p,p||'@example.invalid',now()),(f,f||'@example.invalid',now()),(u,u||'@example.invalid',null);
+ insert into public.team_memberships values(a,'administrator'),(c,'coach'),(p,'parent'),(f,'parent'),(u,'parent');
+ insert into public.team_players(id,display_name,roster_status) values(child,'Email active QA','active'),(former,'Email former QA','former');
+ insert into public.family_links values(p,child,'parent'),(f,former,'parent'),(u,child,'parent');
+ if (select count(*) from team_private.team_email_recipients() where user_id in(a,c,p,f,u))<>3 then raise exception 'Incorrect recipients';end if;
+ update public.team_documents set version=version+1,data=jsonb_set(data,'{items}',coalesce(data->'items','[]'::jsonb)||jsonb_build_array(jsonb_build_object('id',ann,'title','QA announcement','body','QA body','at',now(),'pinned',false))) where key='announcements';
+ if (select count(*) from public.team_email_outbox where announcement_id=ann and user_id in(a,c,p,f,u))<>3 then raise exception 'New announcement email missing or private recipients leaked';end if;
+ update public.team_documents set version=version+1,data=jsonb_set(data,'{items}',(select jsonb_agg(case when x->>'id'=ann then x||'{"pinned":true}'::jsonb else x end) from jsonb_array_elements(data->'items') x)) where key='announcements';
+ if (select count(*) from public.team_email_outbox where announcement_id=ann and user_id in(a,c,p,f,u))<>3 then raise exception 'Pinning resent emails';end if;
+ update public.team_documents set version=version+1,data=jsonb_set(data,'{items}',(select jsonb_agg(case when x->>'id'=ann then x||'{"body":"QA updated body"}'::jsonb else x end) from jsonb_array_elements(data->'items') x)) where key='announcements';
+ if (select count(*) from public.team_email_outbox where announcement_id=ann and user_id in(a,c,p,f,u))<>6 then raise exception 'Edited announcement email missing';end if;
+ insert into public.team_events(id,title,type,date,time,location,cancelled) values(ev,'Reminder QA','Practice','2026-10-22','18:30','QA gym',false),(winter,'Winter reminder QA','Practice','2026-11-05','18:30','QA gym',false);
+ perform team_private.queue_practice_reminders('2026-10-21 22:59:59+00');
+ if exists(select 1 from public.team_email_outbox where event_id=ev) then raise exception 'Reminder before 6pm CDT';end if;
+ perform team_private.queue_practice_reminders('2026-10-21 23:00:00+00');
+ perform team_private.queue_practice_reminders('2026-10-21 23:05:00+00');
+ if (select count(*) from public.team_email_outbox where event_id=ev and user_id in(a,c,p,f,u))<>3 then raise exception 'Missing or duplicate practice reminder';end if;
+ perform team_private.queue_practice_reminders('2026-11-04 23:59:59+00');
+ if exists(select 1 from public.team_email_outbox where event_id=winter) then raise exception 'Reminder before 6pm CST';end if;
+ perform team_private.queue_practice_reminders('2026-11-05 00:00:00+00');
+ if (select count(*) from public.team_email_outbox where event_id=winter and user_id in(a,c,p,f,u))<>3 then raise exception 'Winter reminder time incorrect';end if;
+ update public.team_events set cancelled=true where id=ev;
+ update public.team_email_outbox set available_at=now(),expires_at=now()+interval '1 hour' where event_id=ev;
+ if exists(select 1 from public.claim_team_emails() where id in(select id from public.team_email_outbox where event_id=ev)) then raise exception 'Cancelled practice claimed';end if;
+ -- Use a practice that is actually due now to verify cancellation filtering at claim time.
+ ev:=gen_random_uuid();
+ insert into public.team_events(id,title,type,date,time,location,cancelled) values(ev,'Due cancellation QA','Practice',((now()+interval '1 hour') at time zone 'America/Chicago')::date,((now()+interval '1 hour') at time zone 'America/Chicago')::time,'QA gym',false);
+ perform team_private.queue_practice_reminders();
+ if not exists(select 1 from public.team_email_outbox where event_id=ev and user_id=p) then raise exception 'Due practice was not queued';end if;
+ update public.team_events set cancelled=true where id=ev;
+ if exists(select 1 from public.claim_team_emails() where id in(select id from public.team_email_outbox where event_id=ev)) then raise exception 'Due cancelled practice sent';end if;
+ perform set_config('request.jwt.claim.sub',p::text,true);set local role authenticated;
+ if exists(select 1 from public.team_email_outbox) then raise exception 'Parent can read email queue';end if;
+ begin perform public.claim_team_emails();raise exception 'Parent can claim emails';exception when insufficient_privilege then null;end;
+ reset role;
+ -- A claim leases each pending message, so an overlapping run cannot claim it again.
+ update public.team_email_outbox set available_at=now(),attempts=0 where announcement_id=ann;
+ perform public.claim_team_emails();
+ if exists(select 1 from public.claim_team_emails() where id in(select id from public.team_email_outbox where announcement_id=ann)) then raise exception 'Concurrent duplicate email claim';end if;
+end $test$;
+rollback;

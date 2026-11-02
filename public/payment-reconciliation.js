@@ -1,0 +1,8 @@
+import {esc,money} from './venmo.js?v=20261101-reconcile';
+import {playerPlan} from './dues.js?v=20261101-player-desk';
+export function reconciliationOverview({roster,dues,reports,receipts,settings,pending=[],month}){
+ const rows=roster.filter(p=>p.roster_status!=='former').map(p=>{const d=dues.find(d=>d.player_id===p.id&&d.period.slice(0,7)===month),required=d?.amount_cents??playerPlan(settings,p.id).monthly;
+ const status=required===0?'Fully sponsored':d?.paid?'Paid':reports.some(r=>r.dues_id===d?.id&&r.status==='pending')?'Needs verification':'No confirmed payment';
+ return `<tr><td>${esc(p.display_name)}</td><td>${money(required)}</td><td>${status}</td></tr>`;}).join('');
+ return `<h3>${esc(month)} payment reconciliation</h3><p>Paid status and received income are separate records. Fully sponsored players owe $0; optional gifts preserve sponsorship.</p><div class="payment-table-wrap"><table class="payment-table"><thead><tr><th>Active player</th><th>Required</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div><h3>Payments needing details</h3><p>Review the accounting note for each payment before importing or recording income. Existing receipts count once. Payments without a net receipt are excluded from cash totals; entered Venmo amounts remain provisional until actual fees are verified.</p>${pending.filter(p=>p.month===month).map(p=>`<p><strong>${esc(p.sender)} / ${money(p.gross_cents)}</strong><br>${esc(roster.find(r=>r.id===p.player_id)?.display_name||'Unmatched player')} / ${esc(p.note)}</p>`).join('')||'<p>No pending payment details.</p>'}<p>${receipts.filter(r=>!r.report_id&&!r.contribution_kind).length} imported Venmo receipts remain unassigned. Review and assign them below; assignment adds no new income.</p>`;
+}

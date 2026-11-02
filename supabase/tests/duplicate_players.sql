@@ -1,0 +1,20 @@
+begin;
+do $test$ declare parent_id uuid:=gen_random_uuid(); staff_id uuid:=gen_random_uuid(); p uuid; r uuid; label text:='Duplicate QA '||gen_random_uuid(); begin
+insert into auth.users(id,email,email_confirmed_at) values(parent_id,parent_id||'@example.invalid',now()),(staff_id,staff_id||'@example.invalid',now());
+insert into public.team_memberships values(staff_id,'coach');
+insert into public.team_players(display_name) values(label) returning id into p;
+insert into public.player_requests(requested_by,child_name,request_kind) values(parent_id,'  '||upper(label)||'  ','new') returning id into r;
+perform set_config('request.jwt.claim.sub',parent_id::text,true);
+begin perform public.review_player_request(r,true,null);raise exception 'Unauthorized approval succeeded';exception when insufficient_privilege then null;end;
+perform set_config('request.jwt.claim.sub',staff_id::text,true);
+begin perform public.review_player_request(r,true,null);raise exception 'Duplicate approval succeeded';exception when unique_violation then null;end;
+if (select status from public.player_requests where id=r)<>'pending' then raise exception 'Blocked request changed';end if;
+perform public.review_player_request(r,true,p);
+if not exists(select 1 from public.family_links where player_id=p and user_id=parent_id) then raise exception 'Existing player not linked';end if;
+insert into public.player_requests(requested_by,child_name,request_kind) values(parent_id,label||' missing','existing') returning id into r;
+begin perform public.review_player_request(r,true,null);raise exception 'Existing request created new player';exception when raise_exception then if sqlerrm not like 'Choose the existing%' then raise;end if;end;
+insert into public.player_requests(requested_by,child_name,request_kind) values(parent_id,label||' new','new') returning id into r;
+perform public.review_player_request(r,true,null);
+if not exists(select 1 from public.team_players where display_name=label||' new') then raise exception 'New profile creation failed';end if;
+end $test$;
+rollback;
